@@ -1,0 +1,27 @@
+speakeasyVersion: 1.346.0
+sources:
+    bannerify-OAS:
+        sourceNamespace: bannerify-oas
+        sourceRevisionDigest: sha256:4901652b6621e73b6023a08d0f652256e8f898cfaabeb40281a67c3247fec966
+        sourceBlobDigest: sha256:6d547e81c622e7ba7516899ca7795fdf2bf8a0cca7316686473fa478f13f0229
+        tags:
+            - latest
+targets:
+    bannerify:
+        source: bannerify-OAS
+        sourceNamespace: bannerify-oas
+        sourceRevisionDigest: sha256:4901652b6621e73b6023a08d0f652256e8f898cfaabeb40281a67c3247fec966
+        sourceBlobDigest: sha256:6d547e81c622e7ba7516899ca7795fdf2bf8a0cca7316686473fa478f13f0229
+        outLocation: /Users/anduc/projects/bannerify-php
+workflow:
+    workflowVersion: 1.0.0
+    sources:
+        bannerify-OAS:
+            inputs:
+                - location: https://api.bannerify.co/openapi
+            registry:
+                location: registry.speakeasyapi.dev/bannerify/bannerify/bannerify-oas
+    targets:
+        bannerify:
+            target: php
+            source: bannerify-OAS
