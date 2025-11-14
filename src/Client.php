@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Bannerify;
 
+use Bannerify\Types\Modification;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Exception\GuzzleException;
 
@@ -45,6 +46,9 @@ class Client
      * 
      * @param string $templateId Template ID (e.g., 'tpl_xxxxxxxxx')
      * @param array $options Options including modifications, format, thumbnail
+     *   - modifications: array<Modification|array>
+     *   - format: string
+     *   - thumbnail: bool
      * @return array{result?: string|null, error?: array} Response with either result or error
      */
     public function createImage(string $templateId, array $options = []): array
