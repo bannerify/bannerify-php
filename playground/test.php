@@ -85,20 +85,20 @@ if (isset($result['result'])) {
     echo "❌ Error: " . $result['error']['message'] . "\n";
 }
 
-// Test 3: Create SVG
-echo "\n3️⃣ Test: Create SVG image\n";
+// Test 3: Create JPEG
+echo "\n3️⃣ Test: Create JPEG image\n";
 $result = $client->createImage($templateId, [
-    'format' => 'svg',
+    'format' => 'jpeg',
     'modifications' => [
-        new Modification(name: 'title', text: 'SVG Output')
+        new Modification(name: 'title', text: 'JPEG Output')
     ]
 ]);
 
 if (isset($result['result'])) {
-    $outputPath = $outputDir . '/test-svg.svg';
+    $outputPath = $outputDir . '/test-jpeg.jpg';
     file_put_contents($outputPath, $result['result']);
-    echo "✅ SVG created: {$outputPath}\n";
-    echo "   Size: " . strlen($result['result']) . " chars\n";
+    echo "✅ JPEG created: {$outputPath}\n";
+    echo "   Size: " . strlen($result['result']) . " bytes\n";
 } else {
     echo "❌ Error: " . $result['error']['message'] . "\n";
 }

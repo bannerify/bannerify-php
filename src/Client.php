@@ -7,6 +7,7 @@ namespace Bannerify;
 use Bannerify\Types\Modification;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Exception\GuzzleException;
+use InvalidArgumentException;
 
 /**
  * Bannerify API Client
@@ -16,6 +17,8 @@ use GuzzleHttp\Exception\GuzzleException;
  */
 class Client
 {
+    private const SUPPORTED_FORMATS = ['png', 'jpeg', 'webp'];
+
     private HttpClient $httpClient;
     private string $apiKey;
     private string $baseUrl;
@@ -47,18 +50,23 @@ class Client
      * @param string $templateId Template ID (e.g., 'tpl_xxxxxxxxx')
      * @param array $options Options including modifications, format, thumbnail
      *   - modifications: array<Modification|array>
-     *   - format: string
+     *   - format: string ('png', 'jpeg', 'webp')
      *   - thumbnail: bool
      * @return array{result?: string|null, error?: array} Response with either result or error
      */
     public function createImage(string $templateId, array $options = []): array
     {
         try {
+            $format = $this->normalizeFormat($options['format'] ?? null);
+            if ($format === null) {
+                return $this->buildError('INVALID_FORMAT', 'Unsupported format. Use png, jpeg, or webp.');
+            }
+
             $payload = [
                 'apiKey' => $this->apiKey,
                 'templateId' => $templateId,
                 'modifications' => $options['modifications'] ?? [],
-                'format' => $options['format'] ?? 'png',
+                'format' => $format,
                 'thumbnail' => $options['thumbnail'] ?? false,
             ];
 
@@ -68,13 +76,7 @@ class Client
 
             $statusCode = $response->getStatusCode();
             if ($statusCode === 200) {
-                $contentType = $response->getHeaderLine('Content-Type');
-                
-                if (str_contains($contentType, 'image/svg')) {
-                    return ['result' => $response->getBody()->getContents()];
-                } else {
-                    return ['result' => $response->getBody()->getContents()];
-                }
+                return ['result' => $response->getBody()->getContents()];
             }
 
             return $this->buildError('HTTP_ERROR', "HTTP {$statusCode}");
@@ -121,17 +123,22 @@ class Client
      * Create an image and store it on Bannerify's CDN
      * 
      * @param string $templateId Template ID
-     * @param array $options Options including modifications, format, thumbnail
+     * @param array $options Options including modifications, format ('png','jpeg','webp'), thumbnail
      * @return array{result?: string|null, error?: array} Response with URL or error
      */
     public function createStoredImage(string $templateId, array $options = []): array
     {
         try {
+            $format = $this->normalizeFormat($options['format'] ?? null);
+            if ($format === null) {
+                return $this->buildError('INVALID_FORMAT', 'Unsupported format. Use png, jpeg, or webp.');
+            }
+
             $payload = [
                 'apiKey' => $this->apiKey,
                 'templateId' => $templateId,
                 'modifications' => $options['modifications'] ?? [],
-                'format' => $options['format'] ?? 'png',
+                'format' => $format,
                 'thumbnail' => $options['thumbnail'] ?? false,
             ];
 
@@ -156,7 +163,7 @@ class Client
      * Generate a signed URL for on-demand image generation
      * 
      * @param string $templateId Template ID
-     * @param array $options Options including modifications, format, thumbnail, nocache
+     * @param array $options Options including modifications, format ('png','jpeg','webp'), thumbnail, nocache
      * @return string The signed URL
      */
     public function generateImageSignedUrl(string $templateId, array $options = []): string
@@ -168,8 +175,12 @@ class Client
             'templateId' => $templateId,
         ];
 
-        if (isset($options['format']) && $options['format'] === 'svg') {
-            $params['format'] = 'svg';
+        if (isset($options['format'])) {
+            $format = $this->normalizeFormat($options['format']);
+            if ($format === null) {
+                throw new InvalidArgumentException('format must be one of: png, jpeg, webp');
+            }
+            $params['format'] = $format;
         }
 
         if (isset($options['modifications'])) {
@@ -209,6 +220,15 @@ class Client
                 'docs' => 'https://bannerify.co/docs',
             ],
         ];
+    }
+
+    private function normalizeFormat(?string $format): ?string
+    {
+        $value = $format ?? 'png';
+        if (!in_array($value, self::SUPPORTED_FORMATS, true)) {
+            return null;
+        }
+        return $value;
     }
 }
 

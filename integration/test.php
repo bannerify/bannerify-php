@@ -49,23 +49,23 @@ try {
     $failed = true;
 }
 
-// Test 3: Create image (SVG)
-echo "Test 3: Creating image (SVG format)... ";
+// Test 3: Create image (JPEG)
+echo "Test 3: Creating image (JPEG format)... ";
 try {
     $result = $client->createImage($templateId, [
-        'format' => 'svg',
+        'format' => 'jpeg',
         'modifications' => [
-            ['name' => 'title', 'text' => 'PHP SDK Test']
+            ['name' => 'title', 'text' => 'PHP SDK JPEG']
         ]
     ]);
     
     if (isset($result['result'])) {
-        $svg = $result['result'];
-        if (str_contains($svg, '<svg')) {
+        $jpeg = $result['result'];
+        if (strlen($jpeg) > 0) {
             echo "✓ PASSED\n";
-            echo "   SVG size: " . strlen($svg) . " bytes\n";
+            echo "   JPEG size: " . strlen($jpeg) . " bytes\n";
         } else {
-            echo "✗ FAILED: Response doesn't contain SVG\n";
+            echo "✗ FAILED: Empty JPEG response\n";
             $failed = true;
         }
     } else {

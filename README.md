@@ -63,9 +63,9 @@ $result = $client->createImage('tpl_xxxxxxxxx', [
     ]
 ]);
 
-// Generate SVG
+// Generate WebP
 $result = $client->createImage('tpl_xxxxxxxxx', [
-    'format' => 'svg',
+    'format' => 'webp',
     'modifications' => [
         ['name' => 'title', 'text' => 'My Title']
     ]
@@ -140,7 +140,7 @@ createImage(string $templateId, array $options = []): array
 
 **Options:**
 - `modifications` (array): Array of modifications
-- `format` (string): 'png' or 'svg'
+- `format` (string): 'png', 'jpeg', or 'webp'
 - `thumbnail` (bool): Generate thumbnail
 
 **Returns:** Array with `result` (string) or `error` (array)
