@@ -32,10 +32,11 @@ class Client
     public function __construct(string $apiKey, array $options = [])
     {
         $this->apiKey = $apiKey;
-        $this->baseUrl = $options['baseUrl'] ?? 'https://api.bannerify.co/v1';
-        
+        $this->baseUrl = rtrim($options['baseUrl'] ?? 'https://api.bannerify.co/v1', '/');
+
         $this->httpClient = new HttpClient([
-            'base_uri' => $this->baseUrl,
+            // Trailing slash required so relative paths resolve under /v1/
+            'base_uri' => $this->baseUrl . '/',
             'timeout' => $options['timeout'] ?? 60.0,
             'headers' => [
                 'Authorization' => 'Bearer ' . $apiKey,
@@ -70,16 +71,12 @@ class Client
                 'thumbnail' => $options['thumbnail'] ?? false,
             ];
 
-            $response = $this->httpClient->post('/templates/createImage', [
+            $response = $this->httpClient->post('templates/createImage', [
                 'json' => $payload,
+                'http_errors' => false,
             ]);
 
-            $statusCode = $response->getStatusCode();
-            if ($statusCode === 200) {
-                return ['result' => $response->getBody()->getContents()];
-            }
-
-            return $this->buildError('HTTP_ERROR', "HTTP {$statusCode}");
+            return $this->parseResponse($response);
         } catch (GuzzleException $e) {
             return $this->buildError('REQUEST_ERROR', $e->getMessage());
         } catch (\Throwable $e) {
@@ -103,15 +100,12 @@ class Client
                 'modifications' => $options['modifications'] ?? [],
             ];
 
-            $response = $this->httpClient->post('/templates/createPdf', [
+            $response = $this->httpClient->post('templates/createPdf', [
                 'json' => $payload,
+                'http_errors' => false,
             ]);
 
-            if ($response->getStatusCode() === 200) {
-                return ['result' => $response->getBody()->getContents()];
-            }
-
-            return $this->buildError('HTTP_ERROR', 'HTTP ' . $response->getStatusCode());
+            return $this->parseResponse($response);
         } catch (GuzzleException $e) {
             return $this->buildError('REQUEST_ERROR', $e->getMessage());
         } catch (\Throwable $e) {
@@ -142,8 +136,9 @@ class Client
                 'thumbnail' => $options['thumbnail'] ?? false,
             ];
 
-            $response = $this->httpClient->post('/templates/createStoredImage', [
+            $response = $this->httpClient->post('templates/createStoredImage', [
                 'json' => $payload,
+                'http_errors' => false,
             ]);
 
             if ($response->getStatusCode() === 200) {
@@ -151,7 +146,7 @@ class Client
                 return ['result' => $data['url'] ?? null];
             }
 
-            return $this->buildError('HTTP_ERROR', 'HTTP ' . $response->getStatusCode());
+            return $this->parseErrorResponse($response);
         } catch (GuzzleException $e) {
             return $this->buildError('REQUEST_ERROR', $e->getMessage());
         } catch (\Throwable $e) {
@@ -202,6 +197,36 @@ class Client
         $params['sign'] = $sign;
 
         return $this->baseUrl . '/templates/signedurl?' . http_build_query($params);
+    }
+
+    /**
+     * @return array{result?: string|null, error?: array}
+     */
+    private function parseResponse(\Psr\Http\Message\ResponseInterface $response): array
+    {
+        if ($response->getStatusCode() === 200) {
+            return ['result' => $response->getBody()->getContents()];
+        }
+
+        return $this->parseErrorResponse($response);
+    }
+
+    /**
+     * @return array{error: array}
+     */
+    private function parseErrorResponse(\Psr\Http\Message\ResponseInterface $response): array
+    {
+        $body = $response->getBody()->getContents();
+        $contentType = $response->getHeaderLine('Content-Type');
+
+        if ($body !== '' && str_contains($contentType, 'application/json')) {
+            $data = json_decode($body, true);
+            if (is_array($data) && isset($data['error']) && is_array($data['error'])) {
+                return ['error' => $data['error']];
+            }
+        }
+
+        return $this->buildError('HTTP_ERROR', 'HTTP ' . $response->getStatusCode());
     }
 
     /**
