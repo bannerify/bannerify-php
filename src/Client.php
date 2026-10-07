@@ -192,8 +192,10 @@ class Client
 
         ksort($params);
 
+        // HMAC keyed with the API key, so the URL can be shared without
+        // exposing anything that can sign a different one.
         $queryString = http_build_query($params);
-        $sign = hash('sha256', $queryString . $apiKeyHashed);
+        $sign = hash_hmac('sha256', $queryString, $this->apiKey);
         $params['sign'] = $sign;
 
         return $this->baseUrl . '/templates/signedurl?' . http_build_query($params);
