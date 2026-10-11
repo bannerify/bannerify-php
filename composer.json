@@ -31,6 +31,9 @@
       "Bannerify\\": "src/"
     }
   },
+  "scripts": {
+    "test": "php tests/run.php"
+  },
   "minimum-stability": "stable",
   "prefer-stable": true,
   "config": {

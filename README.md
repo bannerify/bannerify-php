@@ -70,10 +70,18 @@ $result = $client->createImage('tpl_xxxxxxxxx', [
         ['name' => 'title', 'text' => 'My Title']
     ]
 ]);
+```
 
-// Generate thumbnail
+A modification can also be a `Bannerify\Types\Modification` object. The SDK leaves out every field that is `null`:
+
+```php
+use Bannerify\Types\Modification;
+
 $result = $client->createImage('tpl_xxxxxxxxx', [
-    'thumbnail' => true
+    'modifications' => [
+        new Modification(name: 'title', text: 'My Title'),
+        new Modification(name: 'image', src: 'https://example.com/image.jpg'),
+    ]
 ]);
 ```
 
@@ -141,7 +149,6 @@ createImage(string $templateId, array $options = []): array
 **Options:**
 - `modifications` (array): Array of modifications
 - `format` (string): 'png', 'jpeg', or 'webp'
-- `thumbnail` (bool): Generate thumbnail
 
 **Returns:** Array with `result` (string) or `error` (array)
 

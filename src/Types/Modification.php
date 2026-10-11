@@ -9,7 +9,7 @@ namespace Bannerify\Types;
  * 
  * Generated from OpenAPI spec: Modification schema
  */
-class Modification
+class Modification implements \JsonSerializable
 {
     /**
      * @param string $name The layer name of the modification
@@ -121,6 +121,17 @@ class Modification
         }
 
         return $data;
+    }
+
+    /**
+     * The request body leaves out every field that is null, because the API
+     * rejects a null value.
+     *
+     * @return array
+     */
+    public function jsonSerialize(): array
+    {
+        return $this->toArray();
     }
 }
 

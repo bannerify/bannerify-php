@@ -40,7 +40,7 @@ class Client
             'timeout' => $options['timeout'] ?? 60.0,
             'headers' => [
                 'Authorization' => 'Bearer ' . $apiKey,
-                'User-Agent' => 'bannerify-php/0.1.0',
+                'User-Agent' => 'bannerify-php/0.2.0',
             ],
         ]);
     }
@@ -49,10 +49,9 @@ class Client
      * Generate an image from a template
      * 
      * @param string $templateId Template ID (e.g., 'tpl_xxxxxxxxx')
-     * @param array $options Options including modifications, format, thumbnail
+     * @param array $options Options including modifications, format
      *   - modifications: array<Modification|array>
      *   - format: string ('png', 'jpeg', 'webp')
-     *   - thumbnail: bool
      * @return array{result?: string|null, error?: array} Response with either result or error
      */
     public function createImage(string $templateId, array $options = []): array
@@ -68,7 +67,6 @@ class Client
                 'templateId' => $templateId,
                 'modifications' => $options['modifications'] ?? [],
                 'format' => $format,
-                'thumbnail' => $options['thumbnail'] ?? false,
             ];
 
             $response = $this->httpClient->post('templates/createImage', [
@@ -117,7 +115,7 @@ class Client
      * Create an image and store it on Bannerify's CDN
      * 
      * @param string $templateId Template ID
-     * @param array $options Options including modifications, format ('png','jpeg','webp'), thumbnail
+     * @param array $options Options including modifications, format ('png','jpeg','webp')
      * @return array{result?: string|null, error?: array} Response with URL or error
      */
     public function createStoredImage(string $templateId, array $options = []): array
@@ -133,7 +131,6 @@ class Client
                 'templateId' => $templateId,
                 'modifications' => $options['modifications'] ?? [],
                 'format' => $format,
-                'thumbnail' => $options['thumbnail'] ?? false,
             ];
 
             $response = $this->httpClient->post('templates/createStoredImage', [
@@ -158,7 +155,7 @@ class Client
      * Generate a signed URL for on-demand image generation
      * 
      * @param string $templateId Template ID
-     * @param array $options Options including modifications, format ('png','jpeg','webp'), thumbnail, nocache
+     * @param array $options Options including modifications, format ('png','jpeg','webp'), nocache
      * @return string The signed URL
      */
     public function generateImageSignedUrl(string $templateId, array $options = []): string
@@ -186,19 +183,26 @@ class Client
             $params['nocache'] = 'true';
         }
 
-        if (isset($options['thumbnail']) && $options['thumbnail']) {
-            $params['thumbnail'] = 'true';
-        }
-
         ksort($params);
 
         // HMAC keyed with the API key, so the URL can be shared without
         // exposing anything that can sign a different one.
-        $queryString = http_build_query($params);
+        $queryString = $this->encodeQuery($params);
         $sign = hash_hmac('sha256', $queryString, $this->apiKey);
-        $params['sign'] = $sign;
 
-        return $this->baseUrl . '/templates/signedurl?' . http_build_query($params);
+        return $this->baseUrl . '/templates/signedurl?' . $queryString . '&sign=' . $sign;
+    }
+
+    /**
+     * Encode the parameters like JavaScript's URLSearchParams, which is how the
+     * server rebuilds the text that it verifies. http_build_query encodes "*" as
+     * %2A, so it is put back.
+     *
+     * @param array<string, string> $params
+     */
+    private function encodeQuery(array $params): string
+    {
+        return str_replace('%2A', '*', http_build_query($params, '', '&', PHP_QUERY_RFC1738));
     }
 
     /**
