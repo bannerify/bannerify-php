@@ -7,6 +7,7 @@ namespace Bannerify;
 use Bannerify\Types\Modification;
 use GuzzleHttp\Client as HttpClient;
 use GuzzleHttp\Exception\GuzzleException;
+use GuzzleHttp\Psr7\Utils;
 use InvalidArgumentException;
 
 /**
@@ -149,6 +150,76 @@ class Client
         } catch (\Throwable $e) {
             return $this->buildError('EXCEPTION', $e->getMessage());
         }
+    }
+
+    /**
+     * Render a video template as an MP4 and stream the events of the render.
+     * Each second of the video counts as one generation.
+     *
+     * @param string $templateId Template ID
+     * @param array $options Options including modifications
+     * @return \Generator<int, array> Events: ['type' => 'queued', 'ahead'] while the video waits
+     *   for a renderer, ['type' => 'progress', 'frame', 'totalFrames', 'progress'] while its frames
+     *   render, then ['type' => 'done', 'url'] or ['type' => 'error', 'error']
+     */
+    public function renderVideo(string $templateId, array $options = []): \Generator
+    {
+        try {
+            $response = $this->httpClient->post('templates/renderVideo', [
+                'query' => ['stream' => 'true'],
+                'json' => [
+                    'apiKey' => $this->apiKey,
+                    'templateId' => $templateId,
+                    'modifications' => $options['modifications'] ?? [],
+                ],
+                'headers' => ['Accept' => 'text/event-stream'],
+                'http_errors' => false,
+                'stream' => true,
+                // A render can wait in line for minutes, so only the connection has a timeout.
+                'timeout' => 0,
+                'connect_timeout' => $this->httpClient->getConfig('timeout'),
+            ]);
+
+            if ($response->getStatusCode() !== 200) {
+                yield ['type' => 'error', ...$this->parseErrorResponse($response)];
+                return;
+            }
+
+            $body = $response->getBody();
+            $data = [];
+            while (!$body->eof()) {
+                $line = rtrim(Utils::readLine($body), "\r\n");
+                if (str_starts_with($line, 'data:')) {
+                    $data[] = trim(substr($line, 5));
+                } elseif ($line === '' && $data !== []) {
+                    yield json_decode(implode("\n", $data), true, 512, JSON_THROW_ON_ERROR);
+                    $data = [];
+                }
+            }
+        } catch (GuzzleException $e) {
+            yield ['type' => 'error', ...$this->buildError('REQUEST_ERROR', $e->getMessage())];
+        }
+    }
+
+    /**
+     * Render a video template as an MP4 and wait until it is stored
+     *
+     * @param string $templateId Template ID
+     * @param array $options Options including modifications
+     * @return array{result?: string, error?: array} Response with the URL of the MP4 or error
+     */
+    public function renderAndWaitVideo(string $templateId, array $options = []): array
+    {
+        foreach ($this->renderVideo($templateId, $options) as $event) {
+            if ($event['type'] === 'done') {
+                return ['result' => $event['url']];
+            }
+            if ($event['type'] === 'error') {
+                return ['error' => $event['error']];
+            }
+        }
+
+        return $this->buildError('STREAM_ENDED', 'The render ended before the video was done');
     }
 
     /**

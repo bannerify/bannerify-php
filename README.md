@@ -113,6 +113,25 @@ $signedUrl = $client->generateImageSignedUrl('tpl_xxxxxxxxx', [
 echo "<img src='{$signedUrl}' alt='Generated Image' />";
 ```
 
+### Rendering Videos
+
+A video template renders as an MP4. Each second of the video counts as one generation.
+
+```php
+// Follow the render: queued, progress, then done or error
+foreach ($client->renderVideo('tpl_xxxxxxxxx', ['modifications' => [['name' => 'title', 'text' => 'Hi']]]) as $event) {
+    match ($event['type']) {
+        'progress' => printf("%d%%\n", $event['progress'] * 100),
+        'done' => print($event['url'] . "\n"),
+        'error' => print($event['error']['message'] . "\n"),
+        default => null,
+    };
+}
+
+// Or wait for the URL of the MP4
+$result = $client->renderAndWaitVideo('tpl_xxxxxxxxx');
+```
+
 ### Error Handling
 
 ```php
@@ -162,6 +181,20 @@ createPdf(string $templateId, array $options = []): array
 
 ```php
 createStoredImage(string $templateId, array $options = []): array
+```
+
+### renderVideo
+
+```php
+renderVideo(string $templateId, array $options = []): Generator
+```
+
+Yields `['type' => 'queued', 'ahead']`, `['type' => 'progress', 'frame', 'totalFrames', 'progress']`, then `['type' => 'done', 'url']` or `['type' => 'error', 'error']`.
+
+### renderAndWaitVideo
+
+```php
+renderAndWaitVideo(string $templateId, array $options = []): array
 ```
 
 ### generateImageSignedUrl

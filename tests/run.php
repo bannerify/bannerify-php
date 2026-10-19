@@ -183,5 +183,57 @@ $check('returns the API error object', function () use ($mockedClient, $assertSa
     $assertSame(['error' => $error], $client->createImage('tpl_x'));
 });
 
+$sse = fn (array $events): Response => new Response(
+    200,
+    ['Content-Type' => 'text/event-stream'],
+    implode('', array_map(fn (array $event) => "event: {$event['type']}\ndata: " . json_encode($event) . "\n\n", $events)),
+);
+$done = ['type' => 'done', 'url' => 'https://images.bannerify.co/files/a.mp4'];
+
+$check('renderVideo streams the events of the render', function () use ($mockedClient, $assertSame, $sse, $done, $vectors) {
+    $history = [];
+    $client = $mockedClient($history, $sse([
+        ['type' => 'queued', 'ahead' => 1],
+        ['type' => 'progress', 'frame' => 30, 'totalFrames' => 60, 'progress' => 0.5],
+        $done,
+    ]));
+
+    $events = iterator_to_array($client->renderVideo('tpl_x', [
+        'modifications' => [new Modification(name: 'Title', text: 'Hi')],
+    ]), false);
+
+    $assertSame(['queued', 'progress', 'done'], array_column($events, 'type'));
+    $request = $history[0]['request'];
+    $assertSame('/v1/templates/renderVideo', $request->getUri()->getPath());
+    $assertSame('stream=true', $request->getUri()->getQuery());
+    $assertSame(
+        ['apiKey' => $vectors['apiKey'], 'templateId' => 'tpl_x', 'modifications' => [['name' => 'Title', 'text' => 'Hi']]],
+        json_decode((string) $request->getBody(), true),
+    );
+});
+
+$check('renderVideo turns a refused request into one error event', function () use ($mockedClient, $assertSame) {
+    $history = [];
+    $error = [
+        'code' => 'PRECONDITION_FAILED',
+        'message' => 'Video rendering is not available yet.',
+        'docs' => '',
+        'requestId' => 'req_1',
+    ];
+    $client = $mockedClient($history, new Response(412, ['Content-Type' => 'application/json'], json_encode(['error' => $error])));
+
+    $assertSame([['type' => 'error', 'error' => $error]], iterator_to_array($client->renderVideo('tpl_x'), false));
+});
+
+$check('renderAndWaitVideo answers the URL of the video, or the error', function () use ($mockedClient, $assertSame, $sse, $done) {
+    $history = [];
+    $waited = $mockedClient($history, $sse([['type' => 'queued', 'ahead' => 0], $done]));
+    $assertSame(['result' => $done['url']], $waited->renderAndWaitVideo('tpl_x'));
+
+    $error = ['code' => 'INTERNAL_SERVER_ERROR', 'message' => 'Could not download a clip.', 'requestId' => 'req_2'];
+    $failed = $mockedClient($history, $sse([['type' => 'error', 'error' => $error]]));
+    $assertSame(['error' => $error], $failed->renderAndWaitVideo('tpl_x'));
+});
+
 echo $failures === 0 ? "\nAll tests passed\n" : "\n$failures test(s) failed\n";
 exit($failures === 0 ? 0 : 1);
