@@ -154,7 +154,7 @@ class Client
 
     /**
      * Render a video template as an MP4 and stream the events of the render.
-     * Each second of the video counts as one generation.
+     * Each second of the video counts as one generation, and as two at 60 fps.
      *
      * @param string $templateId Template ID
      * @param array $options Options including modifications

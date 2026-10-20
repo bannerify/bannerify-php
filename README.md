@@ -115,7 +115,7 @@ echo "<img src='{$signedUrl}' alt='Generated Image' />";
 
 ### Rendering Videos
 
-A video template renders as an MP4. Each second of the video counts as one generation.
+A video template renders as an MP4. Each second of the video counts as one generation, and as two at 60 fps.
 
 ```php
 // Follow the render: queued, progress, then done or error
