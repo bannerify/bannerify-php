@@ -54,9 +54,9 @@ $queryPair = function (string $url, string $key): ?string {
     return null;
 };
 
-/** A client whose HTTP calls go to a mock and are recorded in $history. */
-$mockedClient = function (array &$history, Response $response) use ($vectors): Client {
-    $stack = HandlerStack::create(new MockHandler([$response]));
+/** A client whose HTTP calls get the $responses in turn and are recorded in $history. */
+$mockedClient = function (array &$history, Response ...$responses) use ($vectors): Client {
+    $stack = HandlerStack::create(new MockHandler($responses));
     $stack->push(Middleware::history($history));
 
     $client = new Client($vectors['apiKey'], ['baseUrl' => $vectors['baseUrl']]);
@@ -223,6 +223,61 @@ $check('renderVideo turns a refused request into one error event', function () u
     $client = $mockedClient($history, new Response(412, ['Content-Type' => 'application/json'], json_encode(['error' => $error])));
 
     $assertSame([['type' => 'error', 'error' => $error]], iterator_to_array($client->renderVideo('tpl_x'), false));
+});
+
+$check('renderVideo reads the same video again by its id when the stream drops', function () use ($mockedClient, $assertSame, $sse, $done, $vectors) {
+    $history = [];
+    $client = $mockedClient(
+        $history,
+        // The stream ends before 'done', like a lost connection.
+        $sse([['type' => 'created', 'id' => 'vid_1'], ['type' => 'queued', 'ahead' => 0]]),
+        $sse([['type' => 'progress', 'frame' => 60, 'totalFrames' => 60, 'progress' => 1], $done]),
+    );
+
+    $events = iterator_to_array($client->renderVideo('tpl_x'), false);
+
+    $assertSame(['created', 'queued', 'progress', 'done'], array_column($events, 'type'));
+    $assertSame(
+        ['POST /v1/templates/renderVideo', 'GET /v1/videos/vid_1'],
+        array_map(fn (array $call) => $call['request']->getMethod() . ' ' . $call['request']->getUri()->getPath(), $history),
+    );
+    parse_str($history[1]['request']->getUri()->getQuery(), $query);
+    $assertSame(['apiKey' => $vectors['apiKey'], 'stream' => 'true'], $query);
+});
+
+$check('renderVideo does not send the render again when it fails before the video has an id', function () use ($mockedClient, $assertSame) {
+    $history = [];
+    $error = ['code' => 'INTERNAL_SERVER_ERROR', 'message' => 'Refused.', 'docs' => '', 'requestId' => 'r'];
+    $client = $mockedClient($history, new Response(500, ['Content-Type' => 'application/json'], json_encode(['error' => $error])));
+
+    $assertSame([['type' => 'error', 'error' => $error]], iterator_to_array($client->renderVideo('tpl_x'), false));
+    $assertSame(1, count($history));
+});
+
+$check('getVideo answers the status and the URL of a video', function () use ($mockedClient, $assertSame, $done, $vectors) {
+    $history = [];
+    $video = ['id' => 'vid_1', 'status' => 'done', 'url' => $done['url']];
+    $client = $mockedClient($history, new Response(200, ['Content-Type' => 'application/json'], json_encode($video)));
+
+    $assertSame(['result' => $video], $client->getVideo('vid_1'));
+    $assertSame('/v1/videos/vid_1', $history[0]['request']->getUri()->getPath());
+    $assertSame('apiKey=' . urlencode($vectors['apiKey']), $history[0]['request']->getUri()->getQuery());
+});
+
+$check('createVideo answers the id of the video at once', function () use ($mockedClient, $assertSame) {
+    $history = [];
+    $created = ['id' => 'vid_1', 'status' => 'queued'];
+    $client = $mockedClient($history, new Response(202, ['Content-Type' => 'application/json'], json_encode($created)));
+
+    $assertSame(['result' => $created], $client->createVideo('tpl_x', [['name' => 'title', 'text' => 'Hi']]));
+    $assertSame(1, count($history));
+    $request = $history[0]['request'];
+    $assertSame('POST', $request->getMethod());
+    $assertSame('/v1/templates/renderVideo', $request->getUri()->getPath());
+    $assertSame('wait=false', $request->getUri()->getQuery());
+    $body = json_decode((string) $request->getBody(), true);
+    $assertSame('tpl_x', $body['templateId']);
+    $assertSame([['name' => 'title', 'text' => 'Hi']], $body['modifications']);
 });
 
 $check('renderAndWaitVideo answers the URL of the video, or the error', function () use ($mockedClient, $assertSame, $sse, $done) {

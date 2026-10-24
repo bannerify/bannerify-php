@@ -118,7 +118,7 @@ echo "<img src='{$signedUrl}' alt='Generated Image' />";
 A video template renders as an MP4. Each second of the video counts as one generation, and as two at 60 fps.
 
 ```php
-// Follow the render: queued, progress, then done or error
+// Follow the render: created, queued, progress, then done or error
 foreach ($client->renderVideo('tpl_xxxxxxxxx', ['modifications' => [['name' => 'title', 'text' => 'Hi']]]) as $event) {
     match ($event['type']) {
         'progress' => printf("%d%%\n", $event['progress'] * 100),
@@ -130,6 +130,25 @@ foreach ($client->renderVideo('tpl_xxxxxxxxx', ['modifications' => [['name' => '
 
 // Or wait for the URL of the MP4
 $result = $client->renderAndWaitVideo('tpl_xxxxxxxxx');
+```
+
+The `created` event gives the id of the video. The video renders to its end even when the connection drops. Then `renderVideo` reads the same video again by its id: it waits 1, 2, 4 and 8 seconds before each of 4 attempts, and it never sends the render again. When the attempts run out, the last event is an `error` with the code `TIMEOUT_ERROR`.
+
+```php
+// Start the video and get its id at once, without waiting
+$created = $client->createVideo('tpl_xxxxxxxxx'); // ['result' => ['id', 'status' => 'queued']] or ['error' => [...]]
+```
+
+`createVideo` sends the render once and never again, because a second request renders a second video.
+
+```php
+// Read the video later by its id
+$video = $client->getVideo('vid_xxx'); // ['result' => ['id', 'status', 'url']] or ['error' => [...]]
+
+// Follow its events again, from the latest one
+foreach ($client->watchVideo('vid_xxx') as $event) {
+    echo $event['type'] . "\n";
+}
 ```
 
 ### Error Handling
@@ -189,13 +208,37 @@ createStoredImage(string $templateId, array $options = []): array
 renderVideo(string $templateId, array $options = []): Generator
 ```
 
-Yields `['type' => 'queued', 'ahead']`, `['type' => 'progress', 'frame', 'totalFrames', 'progress']`, then `['type' => 'done', 'url']` or `['type' => 'error', 'error']`.
+Yields `['type' => 'created', 'id']`, `['type' => 'queued', 'ahead']`, `['type' => 'progress', 'frame', 'totalFrames', 'progress']`, then `['type' => 'done', 'url']` or `['type' => 'error', 'error']`.
 
 ### renderAndWaitVideo
 
 ```php
 renderAndWaitVideo(string $templateId, array $options = []): array
 ```
+
+### watchVideo
+
+```php
+watchVideo(string $id): Generator
+```
+
+Yields the events of `renderVideo` again, from the latest one, without `created`.
+
+### createVideo
+
+```php
+createVideo(string $templateId, array $modifications = []): array
+```
+
+Starts the video and returns `['result' => ['id', 'status' => 'queued']]` or `['error' => [...]]` at once.
+
+### getVideo
+
+```php
+getVideo(string $id): array
+```
+
+Returns `['result' => ['id', 'status', 'url'?, 'error'?]]` or `['error' => [...]]`. `status` is `queued`, `rendering`, `done` or `failed`.
 
 ### generateImageSignedUrl
 
